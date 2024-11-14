@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -36,6 +36,7 @@ use starlark_map::StarlarkHasher;
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::coerce;
+use crate::docs::{DocFunction, DocItem, DocMember, DocReturn};
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
@@ -132,7 +133,7 @@ pub struct RecordTypeGen<V: RecordCell> {
     fields: SmallMap<String, FieldGen<V>>,
     /// Creating these on every invoke is pretty expensive (profiling shows)
     /// so compute them in advance and cache.
-    parameter_spec: ParametersSpec<FrozenValue>,
+    parameter_spec: ParametersSpec<V>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -167,7 +168,7 @@ impl<'v> RecordType<'v> {
 
     fn make_parameter_spec(
         fields: &SmallMap<String, FieldGen<Value<'v>>>,
-    ) -> ParametersSpec<FrozenValue> {
+    ) -> ParametersSpec<Value<'v>> {
         ParametersSpec::new_named_only(
             "record",
             fields.iter().map(|(name, field)| {
@@ -175,7 +176,7 @@ impl<'v> RecordType<'v> {
                     name.as_str(),
                     match field.default {
                         None => ParametersSpecParam::Required,
-                        Some(_default) => ParametersSpecParam::Optional,
+                        Some(default) => ParametersSpecParam::Defaulted(default),
                     },
                 )
             }),
@@ -189,7 +190,7 @@ impl<'v> Freeze for RecordType<'v> {
         Ok(FrozenRecordType {
             id: self.id,
             fields: self.fields.freeze(freezer)?,
-            parameter_spec: self.parameter_spec,
+            parameter_spec: self.parameter_spec.freeze(freezer)?,
             ty_record_data: self.ty_record_data.into_inner(),
         })
     }
@@ -347,6 +348,27 @@ where
                 ty_record_type,
             }))
         })
+    }
+
+    fn documentation(&self) -> DocItem
+    where
+        Self: Sized,
+    {
+        let ty = self.instance_ty();
+        DocItem::Member(DocMember::Function(DocFunction {
+            docs: None,
+            params: self.parameter_spec.documentation(
+                self.fields
+                    .iter()
+                    .map(|(_name, field)| field.typ.as_ty().dupe())
+                    .collect(),
+                HashMap::new(),
+            ),
+            ret: DocReturn {
+                docs: None,
+                typ: ty,
+            },
+        }))
     }
 }
 
