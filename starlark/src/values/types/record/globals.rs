@@ -59,6 +59,7 @@ pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
     /// Records are stored deduplicating their field names, making them more memory efficient than dictionaries.
     fn record<'v>(
         #[starlark(require = named)] __doc__: Option<String>,
+        #[starlark(require = named)] __validate__: Option<Value<'v>>,
         #[starlark(kwargs)] kwargs: SmallMap<String, Value<'v>>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> anyhow::Result<RecordType<'v>> {
@@ -71,7 +72,7 @@ pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
             };
             mp.insert_hashed(k, field);
         }
-        Ok(RecordType::new(mp, __doc__))
+        Ok(RecordType::new(mp, __doc__, __validate__))
     }
 
     /// Creates a field record. Used as an argument to the `record` function.

@@ -135,6 +135,7 @@ pub struct RecordTypeGen<V: RecordCell> {
     parameter_spec: ParametersSpec<V>,
     /// the `__doc__` provided to this record definition, if any
     docs: Option<String>,
+    validator: Option<V>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -157,7 +158,7 @@ pub(crate) fn record_fields<'v>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, docs: Option<String>) -> Self {
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, docs: Option<String>, validator: Option<Value<'v>>) -> Self {
         let parameter_spec = Self::make_parameter_spec(&fields);
         Self {
             id: TypeInstanceId::gen(),
@@ -165,6 +166,7 @@ impl<'v> RecordType<'v> {
             parameter_spec,
             ty_record_data: OnceCell::new(),
             docs,
+            validator,
         }
     }
 
@@ -189,12 +191,17 @@ impl<'v> RecordType<'v> {
 impl<'v> Freeze for RecordType<'v> {
     type Frozen = FrozenRecordType;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        let validator = match self.validator {
+            Some(validator) => Some(validator.freeze(freezer)?),
+            None => None,
+        };
         Ok(FrozenRecordType {
             id: self.id,
             fields: self.fields.freeze(freezer)?,
             parameter_spec: self.parameter_spec.freeze(freezer)?,
             ty_record_data: self.ty_record_data.into_inner(),
             docs: self.docs,
+            validator,
         })
     }
 }
@@ -246,6 +253,10 @@ where
         }
 
         let this = me;
+
+        if let Some(validator) = self.validator {
+            _ = validator.invoke(args, eval)?;
+        }
 
         self.parameter_spec
             .parser(args, eval, |param_parser, eval| {
