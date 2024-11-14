@@ -36,7 +36,7 @@ use starlark_map::StarlarkHasher;
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::coerce;
-use crate::docs::{DocFunction, DocItem, DocMember, DocReturn};
+use crate::docs::{DocFunction, DocItem, DocMember, DocReturn, DocString, DocStringKind};
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
@@ -134,6 +134,8 @@ pub struct RecordTypeGen<V: RecordCell> {
     /// Creating these on every invoke is pretty expensive (profiling shows)
     /// so compute them in advance and cache.
     parameter_spec: ParametersSpec<V>,
+    /// the `__doc__` provided to this record definition, if any
+    doc: Option<String>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -156,13 +158,14 @@ pub(crate) fn record_fields<'v>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>) -> Self {
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, doc: Option<String>) -> Self {
         let parameter_spec = Self::make_parameter_spec(&fields);
         Self {
             id: TypeInstanceId::gen(),
             fields,
             parameter_spec,
             ty_record_data: OnceCell::new(),
+            doc,
         }
     }
 
@@ -192,6 +195,7 @@ impl<'v> Freeze for RecordType<'v> {
             fields: self.fields.freeze(freezer)?,
             parameter_spec: self.parameter_spec.freeze(freezer)?,
             ty_record_data: self.ty_record_data.into_inner(),
+            doc: self.doc,
         })
     }
 }
@@ -355,8 +359,9 @@ where
         Self: Sized,
     {
         let ty = self.instance_ty();
+        let docstring = self.doc.as_ref().and_then(|s| DocString::from_docstring(DocStringKind::Starlark, s));
         DocItem::Member(DocMember::Function(DocFunction {
-            docs: None,
+            docs: docstring,
             params: self.parameter_spec.documentation(
                 self.fields
                     .iter()
