@@ -20,7 +20,6 @@ use std::fmt::Display;
 use std::hash::Hash;
 
 use allocative::Allocative;
-use dupe::Dupe;
 use starlark_derive::starlark_value;
 use starlark_derive::Freeze;
 use starlark_derive::NoSerialize;
@@ -41,7 +40,6 @@ use crate::values::ValueLike;
 #[derive(
     Clone,
     Debug,
-    Dupe,
     Trace,
     Freeze,
     NoSerialize,
@@ -51,6 +49,7 @@ use crate::values::ValueLike;
 pub struct FieldGen<V: ValueLifetimeless> {
     pub(crate) typ: TypeCompiled<V>,
     pub(crate) default: Option<V>,
+    pub(crate) docs: Option<String>,
 }
 
 impl<'v, V: ValueLike<'v>> Display for FieldGen<V> {
@@ -74,8 +73,8 @@ unsafe impl<From: Coerce<To> + ValueLifetimeless, To: ValueLifetimeless> Coerce<
 starlark_complex_value!(pub(crate) Field);
 
 impl<V: ValueLifetimeless> FieldGen<V> {
-    pub(crate) fn new(typ: TypeCompiled<V>, default: Option<V>) -> Self {
-        Self { typ, default }
+    pub(crate) fn new(typ: TypeCompiled<V>, default: Option<V>, docs: Option<String>) -> Self {
+        Self { typ, default, docs }
     }
 }
 

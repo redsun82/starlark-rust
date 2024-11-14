@@ -17,7 +17,6 @@
 
 //! Implementation of `record` function.
 
-use dupe::Dupe;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
@@ -67,8 +66,8 @@ pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
         let mut mp = SmallMap::with_capacity(kwargs.len());
         for (k, v) in kwargs.into_iter_hashed() {
             let field = match Field::from_value(v) {
-                None => Field::new(TypeCompiled::new(v, eval.heap())?, None),
-                Some(v) => v.dupe(),
+                None => Field::new(TypeCompiled::new(v, eval.heap())?, None, None),
+                Some(v) => v.clone(),
             };
             mp.insert_hashed(k, field);
         }
@@ -88,6 +87,7 @@ pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
     fn field<'v>(
         #[starlark(require = pos)] typ: Value<'v>,
         default: Option<Value<'v>>,
+        #[starlark(require = named)] doc: Option<String>,
         eval: &mut Evaluator<'v, '_, '_>,
     ) -> starlark::Result<Field<'v>> {
         // We compile the type even if we don't have a default to raise the error sooner
@@ -95,7 +95,7 @@ pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
         if let Some(d) = default {
             compiled.check_type(d, Some("default"))?;
         }
-        Ok(Field::new(compiled, default))
+        Ok(Field::new(compiled, default, doc))
     }
 }
 

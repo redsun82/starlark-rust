@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -135,7 +134,7 @@ pub struct RecordTypeGen<V: RecordCell> {
     /// so compute them in advance and cache.
     parameter_spec: ParametersSpec<V>,
     /// the `__doc__` provided to this record definition, if any
-    doc: Option<String>,
+    docs: Option<String>,
 }
 
 impl<'v, V: ValueLike<'v> + RecordCell> Display for RecordTypeGen<V> {
@@ -158,14 +157,14 @@ pub(crate) fn record_fields<'v>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, doc: Option<String>) -> Self {
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, docs: Option<String>) -> Self {
         let parameter_spec = Self::make_parameter_spec(&fields);
         Self {
             id: TypeInstanceId::gen(),
             fields,
             parameter_spec,
             ty_record_data: OnceCell::new(),
-            doc,
+            docs,
         }
     }
 
@@ -195,7 +194,7 @@ impl<'v> Freeze for RecordType<'v> {
             fields: self.fields.freeze(freezer)?,
             parameter_spec: self.parameter_spec.freeze(freezer)?,
             ty_record_data: self.ty_record_data.into_inner(),
-            doc: self.doc,
+            docs: self.docs,
         })
     }
 }
@@ -359,15 +358,19 @@ where
         Self: Sized,
     {
         let ty = self.instance_ty();
-        let docstring = self.doc.as_ref().and_then(|s| DocString::from_docstring(DocStringKind::Starlark, s));
+        let docs = self.docs.as_ref().and_then(|s| DocString::from_docstring(DocStringKind::Starlark, s));
         DocItem::Member(DocMember::Function(DocFunction {
-            docs: docstring,
+            docs,
             params: self.parameter_spec.documentation(
                 self.fields
                     .iter()
                     .map(|(_name, field)| field.typ.as_ty().dupe())
                     .collect(),
-                HashMap::new(),
+                self.fields
+                    .iter()
+                    .filter_map(|(name, field)| {
+                        field.docs.as_ref().map(|d| (name.clone(), DocString::from_docstring(DocStringKind::Starlark, d)))
+                    }).collect(),
             ),
             ret: DocReturn {
                 docs: None,
